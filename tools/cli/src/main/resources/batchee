@@ -1,0 +1,110 @@
+#!/bin/sh
+#============================================================
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+cygwin=false
+case "`uname`" in
+CYGWIN*) cygwin=true;;
+esac
+
+# find JAVA
+if [ -z "$JAVA_HOME" -a -z "$JRE_HOME" ]; then
+  if $darwin; then
+    if [ -x '/usr/libexec/java_home' ] ; then
+      export JAVA_HOME=`/usr/libexec/java_home`
+    elif [ -d "/System/Library/Frameworks/JavaVM.framework/Versions/CurrentJDK/Home" ]; then
+      export JAVA_HOME="/System/Library/Frameworks/JavaVM.framework/Versions/CurrentJDK/Home"
+    fi
+  else
+    JAVA_PATH=`which java 2>/dev/null`
+    if [ "x$JAVA_HOME" != "x" ]; then
+      JAVA_PATH=`dirname $JAVA_PATH 2>/dev/null`
+      JAVA_HOME=`dirname $JAVA_PATH 2>/dev/null`
+    fi
+    if [ "x$JAVA_HOME" = "x" ]; then
+      if [ -x /usr/bin/java ]; then
+        JAVA_HOME=/usr
+      fi
+    fi
+  fi
+fi
+if [ -z "$_RUNJAVA" ]; then
+  _RUNJAVA="$JAVA_HOME"/bin/java
+fi
+
+if $cygwin; then
+  _RUNJAVA=`cygpath --absolute --unix "$_RUNJAVA"`
+  echo $_RUNJAVA
+fi
+
+if [ -z "$BATCHEE_HOME" -o ! -d "$BATCHEE_HOME" ] ; then
+  # find batchee
+  if [ -d /opt/batchee ] ; then
+    BATCHEE_HOME=/opt/batchee
+  fi
+
+  if [ -d "${HOME}/opt/batchee" ] ; then
+    BATCHEE_HOME="${HOME}/opt/batchee"
+  fi
+
+  ## resolve links - $0 may be a link to batchee's home
+  PRG="$0"
+  progname=`basename "$0"`
+
+  # need this for relative symlinks
+  while [ -L "$PRG" ] ; do
+    ls=`ls -ld "$PRG"`
+    link=`expr "$ls" : '.*-> \(.*\)$'`
+    if expr "$link" : '/.*' > /dev/null; then
+      PRG="$link"
+    else
+      PRG=`dirname "$PRG"`"/$link"
+    fi
+  done
+
+
+  BATCHEE_HOME=`dirname "$PRG"`/..
+
+  # make it fully qualified
+  BATCHEE_HOME=`cd "$BATCHEE_HOME" && pwd`
+fi
+
+bin="$BATCHEE_HOME/bin/batchee-cli-${project.version}-bootstrap.jar"
+if $cygwin; then
+    bin=$(cygpath -wp "$bin")
+fi
+
+home="$BATCHEE_HOME"
+if $cygwin; then
+    home=$(cygpath -wp "$home")
+fi
+BATCHEE_OPTS="$BATCHEE_OPTS -Dbatchee.home=$home"
+
+args="$@"
+if [ "$1" = "debug" ]; then
+    BATCHEE_OPTS="-Xdebug -Xnoagent -Djava.compiler=NONE -Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5005 $BATCHEE_OPTS"
+	shift
+fi
+
+logging="$BATCHEE_HOME/conf/logging.properties"
+if $cygwin; then
+    logging=$(cygpath -wp "$logging")
+fi
+if [ -f "$logging" ] ; then
+    BATCHEE_OPTS="$BATCHEE_OPTS -Djava.util.logging.config.file=$logging"
+fi
+
+"$_RUNJAVA" $BATCHEE_OPTS -cp "$bin" org.apache.batchee.cli.bootstrap.Bootstrap $@
